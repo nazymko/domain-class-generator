@@ -4,10 +4,17 @@ A powerful IntelliJ IDEA plugin that generates domain classes from library class
 
 ## Features
 
-- **Generate Domain Classes**: Automatically generate domain classes from any library package
+- **Smart Context Detection**: Automatically detects the class at your cursor or current file
+- **Flexible Generation**: Generate a single class or an entire package
+- **Package Selector**: Choose from existing packages in dropdown or create new ones
+- **Automatic Dependency Collection**: Automatically generates domain classes for:
+  - All superclasses up to Object
+  - All custom field types (recursively)
+  - Complete dependency graph resolution
+- **Correct Import Resolution**: Generated classes import from target package (not library packages)
 - **Inheritance Support**: Maintains superclass/subclass relationships in generated classes
 - **Lombok Integration**: Add Lombok annotations (@Data, @Builder, @Getter, @Setter, etc.) to generated classes
-- **Configurable UI**: Easy-to-use dialog for package selection and annotation configuration
+- **Configurable UI**: Easy-to-use dialog with intelligent suggestions
 - **Fast Access**: Keyboard shortcut **Ctrl+Shift+E** (Cmd+Shift+E on Mac)
 
 ## Installation
@@ -30,18 +37,23 @@ A powerful IntelliJ IDEA plugin that generates domain classes from library class
 
 ### Quick Start
 
-1. Open any Java file in your project
-2. Press **Ctrl+Shift+E** (or **Cmd+Shift+E** on Mac)
-3. Configure generation:
-   - **Source Package**: Enter the full package name of library classes (e.g., `com.library.models`)
-   - **Target Package**: Enter where to generate domain classes (e.g., `com.myapp.domain`)
+1. **Open any Java file** (preferably a library class you want to extend)
+2. **Place your cursor** on the class or anywhere in the file
+3. Press **Ctrl+Shift+E** (or **Cmd+Shift+E** on Mac)
+4. The plugin automatically detects:
+   - The class at your cursor
+   - The package of that class
+5. Configure generation:
+   - **Detected Class**: Shows the class you're currently on
+   - **Source Package**: Auto-filled from detected class (editable)
+   - **Target Package**: Click **📁 Browse** to select from tree view, or type manually
+   - **Generation Scope**: Choose to generate only the detected class or entire package
    - **Lombok Annotations**: Select desired annotations
    - **Options**: Configure inheritance and accessor generation
-4. Click **OK**
+6. Click **OK**
 
 The plugin will:
-- Scan all classes in the source package (including subpackages)
-- Generate domain classes in the target package
+- Generate domain class(es) in the target package
 - Maintain inheritance hierarchy
 - Add selected Lombok annotations
 - Show progress indicator
@@ -76,7 +88,95 @@ public class User {
 }
 ```
 
-### With Inheritance
+### With Automatic Superclass Generation
+
+**Example**: When generating from a library class that extends another library class:
+
+**Source Class**:
+```java
+// org.example.data.BatchDocumentInputConfig
+package org.example.data;
+
+import com.google.protobuf.GeneratedMessageV3;
+
+public class BatchDocumentInputConfig extends GeneratedMessageV3 {
+    private String inputPath;
+    private int batchSize;
+}
+```
+
+**Plugin automatically generates BOTH classes**:
+```java
+// com.myapp.domain.GeneratedMessageV3 (automatically included!)
+@Data
+public class GeneratedMessageV3 {
+    // Fields from the library superclass
+}
+
+// com.myapp.domain.BatchDocumentInputConfig
+@Data
+public class BatchDocumentInputConfig extends GeneratedMessageV3 {
+    private String inputPath;
+    private int batchSize;
+}
+```
+
+The plugin automatically:
+1. Detects that `BatchDocumentInputConfig` extends `GeneratedMessageV3`
+2. Generates a domain class for `GeneratedMessageV3` first (from `com.google.protobuf`)
+3. Generates `BatchDocumentInputConfig` that extends your new domain `GeneratedMessageV3`
+4. Uses correct imports: `import com.myapp.domain.GeneratedMessageV3;` (NOT the library class!)
+5. Continues up the hierarchy until reaching `Object`
+6. Also generates domain classes for any custom types used in fields
+
+**Result**: All generated classes properly reference each other from the target package, not the library packages!
+
+### With Field Type Dependencies
+
+**Source Classes**:
+```java
+// com.library.models.Address
+public class Address {
+    private String street;
+    private String city;
+}
+
+// com.library.models.User
+public class User {
+    private String name;
+    private Address address;  // Custom type!
+}
+```
+
+**When you generate `User`, the plugin automatically**:
+1. Detects `Address` is used as a field type
+2. Generates domain class for `Address` first
+3. Generates domain class for `User` with correct import
+
+**Generated Classes**:
+```java
+// com.myapp.domain.Address (auto-generated!)
+package com.myapp.domain;
+
+@Data
+public class Address {
+    private String street;
+    private String city;
+}
+
+// com.myapp.domain.User
+package com.myapp.domain;
+
+import com.myapp.domain.Address;  // Correct import!
+
+@Data
+public class User {
+    private String name;
+    private Address address;
+}
+```
+
+### With Inheritance in Same Package
 
 **Source Classes**:
 ```java
@@ -109,6 +209,19 @@ public class User extends BaseEntity {
 ```
 
 ## Configuration Options
+
+### Generation Scope
+- **Single Class**: Generate domain class only for the detected class at cursor
+- **Entire Package**: Generate domain classes for all classes in the source package
+
+### Package Selection
+- **Source Package**: Auto-detected from current file, editable
+- **Target Package**: Native JetBrains package browser:
+  - Click **folder icon** to open tree view of all project packages
+  - Navigate and select from visual package hierarchy
+  - Auto-suggested package pre-filled (domain, dto, model, entity, etc.)
+  - Type custom package name manually if preferred
+  - Only shows your project's source directories (excludes libraries)
 
 ### Lombok Annotations
 - **@Data**: Generates getters, setters, toString, equals, and hashCode

@@ -6,11 +6,18 @@ This IntelliJ IDEA plugin generates domain classes from library classes with Lom
 
 ## Features
 
-- Generate domain classes from any library package to a target package
-- Automatically follows extension/superclass structure where possible
-- Configure Lombok annotations (@Builder, @Data, @Getter, @Setter, etc.) per generation
-- Easy-to-use configuration UI for package selection and annotation options
-- Keyboard shortcut: **Ctrl+Shift+E** (Windows/Linux) or **Cmd+Shift+E** (Mac)
+- **Smart Context Detection**: Automatically detects the class at cursor position or from current file
+- **Flexible Generation Modes**:
+  - Single class generation (for detected class only)
+  - Entire package generation (all classes in source package)
+- **Intelligent Package Selection**:
+  - Dropdown showing existing packages in project
+  - Suggested target packages based on source package
+  - Create new packages on-the-fly
+- **Inheritance Support**: Automatically follows extension/superclass structure
+- **Lombok Integration**: Configure annotations (@Builder, @Data, @Getter, @Setter, etc.)
+- **Easy-to-use UI**: Context-aware dialog with auto-populated fields
+- **Keyboard Shortcut**: **Ctrl+Shift+E** (Windows/Linux) or **Cmd+Shift+E** (Mac)
 
 ## Project Structure
 
@@ -51,6 +58,8 @@ src/main/kotlin/com/example/domaingenerator/
     - lombokAnnotations: Selected Lombok annotations
     - followInheritance: Whether to maintain superclass relationships
     - generateGettersSetters: Generate manual accessors if no Lombok
+    - singleClassMode: Whether to generate only one class or entire package
+    - singleClass: The specific PsiClass to generate (if single class mode)
 
 - **LombokAnnotations** (`models/GeneratorConfig.kt`)
   - Configurable Lombok annotations:
@@ -65,13 +74,20 @@ src/main/kotlin/com/example/domaingenerator/
 
 - **GeneratorConfigDialog** (`ui/GeneratorConfigDialog.kt`)
   - Configuration dialog using IntelliJ's Kotlin UI DSL
-  - Input fields:
-    - Source package text field
-    - Target package text field
+  - Auto-populated with detected context:
+    - Shows detected class name and FQN
+    - Auto-fills source package from detected class
+    - Pre-fills suggested target package
+  - Input components:
+    - Detected Context group (shows current class info)
+    - Source package text field (auto-filled, editable)
+    - Target package field with browse button (opens native PackageChooserDialog)
+    - Generation scope radio buttons (single class vs entire package)
     - Lombok annotation checkboxes
     - Additional options (inheritance, manual accessors)
-  - Validates package names and ensures source != target
-  - Returns GeneratorConfig on OK
+  - Uses JetBrains' native `PackageChooserDialog` for package selection
+  - Validates package names using PackageHelper
+  - Returns GeneratorConfig with all selections
 
 ### Services
 
@@ -119,6 +135,16 @@ src/main/kotlin/com/example/domaingenerator/
     - Type checking: `isPrimitive()`, `isAbstract()`, `isInterface()`, `isEnum()`
     - Field analysis: `hasGetter()`, `hasSetter()`
 
+- **PackageHelper** (`utils/PackageHelper.kt`)
+  - Package discovery and validation utilities
+  - Key methods:
+    - `getAllPackages()`: Get all Java packages in user's project source directories (excludes libraries)
+    - `collectPackagesFromDirectory()`: Recursively scan source directories for packages
+    - `getPackagesMatchingPrefix()`: Autocomplete support
+    - `getSuggestedTargetPackages()`: Suggest packages based on source
+    - `isValidPackageName()`: Validate package name format
+  - Uses `ProjectRootManager.contentSourceRoots` to only scan user's code
+
 - **NotificationHelper** (`utils/NotificationHelper.kt`)
   - Shows balloon notifications to users
   - Methods: `showInfo()`, `showWarning()`, `showError()`
@@ -150,20 +176,50 @@ src/main/kotlin/com/example/domaingenerator/
 
 ## Usage
 
-1. Open any Java file in your project
-2. Press **Ctrl+Shift+E** (or Cmd+Shift+E on Mac)
-3. In the dialog:
-   - Enter source package (e.g., `com.library.models`)
-   - Enter target package (e.g., `com.myapp.domain`)
-   - Select desired Lombok annotations
-   - Configure additional options
-4. Click OK
-5. Plugin will:
-   - Scan source package for classes
-   - Generate domain classes in target package
+### Basic Workflow
+
+1. **Open any Java file** (library class you want to extend)
+2. **Position cursor** on the class or anywhere in the file
+3. Press **Ctrl+Shift+E** (or **Cmd+Shift+E** on Mac)
+4. The dialog opens with auto-detected context:
+   - **Detected Class**: Shows your current class (e.g., "User")
+   - **Source Package**: Auto-filled (e.g., "com.library.models")
+   - **Target Package**: Dropdown with suggestions
+5. Choose generation scope:
+   - **Single Class**: Generate only the detected class
+   - **Entire Package**: Generate all classes in source package
+6. Select Lombok annotations and options
+7. Click **OK**
+8. Plugin will:
+   - Generate domain class(es) in target package
    - Show progress indicator
    - Display success notification
    - Open first generated file
+
+### Package Selection
+
+The target package field uses JetBrains' native package chooser:
+1. **Click browse button** (📁) to open package chooser dialog
+2. **Tree view** shows all packages in your project's source directories
+3. **Navigate** the package hierarchy visually
+4. **Select** the target package from the tree
+5. **Or type manually** - you can also type a package name directly
+
+**Important**: The package chooser only shows packages from your project's source roots (src/main/java, etc.). Library/dependency packages are excluded. The field is pre-filled with a suggested package (domain, dto, model, etc.) based on the source package.
+
+### Generation Modes
+
+#### Single Class Mode
+- Available when a class is detected at cursor
+- Generates only the detected class
+- Faster for one-off domain class creation
+- Still respects inheritance (generates superclass if needed and selected)
+
+#### Package Mode
+- Scans entire source package recursively
+- Generates all non-interface, non-enum classes
+- Maintains inheritance hierarchy
+- Suitable for bulk migration
 
 ## Build Commands
 

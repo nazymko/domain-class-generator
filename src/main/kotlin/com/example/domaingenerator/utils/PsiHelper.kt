@@ -191,4 +191,165 @@ object PsiHelper {
         val scope = GlobalSearchScope.allScope(project)
         return psiFacade.findClass(fqn, scope)
     }
+
+    /**
+     * Collect all superclasses recursively up to Object.
+     * Returns list starting from most distant ancestor to immediate parent.
+     */
+    fun getAllSuperclasses(psiClass: PsiClass): List<PsiClass> {
+        val superclasses = mutableListOf<PsiClass>()
+        var currentClass = psiClass
+
+        while (true) {
+            val superClass = getNonObjectSuperclass(currentClass) ?: break
+            superclasses.add(0, superClass) // Add at beginning to maintain hierarchy order
+            currentClass = superClass
+        }
+
+        return superclasses
+    }
+
+    /**
+     * Collect all superclasses for a list of classes, removing duplicates.
+     * Returns combined list with superclasses first.
+     */
+    fun collectAllSuperclassesForClasses(classes: List<PsiClass>): List<PsiClass> {
+        val allClasses = mutableSetOf<PsiClass>()
+        val superclassesSet = mutableSetOf<PsiClass>()
+
+        // First collect all superclasses
+        classes.forEach { psiClass ->
+            val superclasses = getAllSuperclasses(psiClass)
+            superclassesSet.addAll(superclasses)
+        }
+
+        // Add superclasses first, then original classes
+        allClasses.addAll(superclassesSet)
+        allClasses.addAll(classes)
+
+        return allClasses.toList()
+    }
+
+    /**
+     * Get all custom type dependencies from a class's fields.
+     * Returns classes used as field types (excluding primitives and java.* classes).
+     */
+    fun getFieldTypeDependencies(psiClass: PsiClass): Set<PsiClass> {
+        val dependencies = mutableSetOf<PsiClass>()
+        val fields = getNonStaticFields(psiClass)
+
+        fields.forEach { field ->
+            collectTypeDependencies(field.type, dependencies)
+        }
+
+        return dependencies
+    }
+
+    /**
+     * Recursively collect type dependencies (including generics).
+     */
+    private fun collectTypeDependencies(type: PsiType, dependencies: MutableSet<PsiClass>) {
+        when (type) {
+            is PsiClassType -> {
+                val resolvedClass = type.resolve()
+                if (resolvedClass != null) {
+                    val fqn = getFqn(resolvedClass)
+                    // Only collect custom types (not primitives, not java.*, not kotlin.*)
+                    if (fqn != null &&
+                        !fqn.startsWith("java.") &&
+                        !fqn.startsWith("kotlin.") &&
+                        !isEnum(resolvedClass) &&
+                        !isInterface(resolvedClass)) {
+                        dependencies.add(resolvedClass)
+                    }
+                }
+
+                // Handle generic parameters
+                type.parameters.forEach { paramType ->
+                    collectTypeDependencies(paramType, dependencies)
+                }
+            }
+            is PsiArrayType -> {
+                collectTypeDependencies(type.componentType, dependencies)
+            }
+        }
+    }
+
+    /**
+     * Collect all dependencies (superclasses and field types) for a list of classes.
+     * Recursively collects dependencies of dependencies.
+     * Returns list with dependencies first, original classes last.
+     */
+    fun collectAllDependencies(classes: List<PsiClass>, maxDepth: Int = 10): List<PsiClass> {
+        val allClasses = mutableSetOf<PsiClass>()
+        val processed = mutableSetOf<PsiClass>()
+        val toProcess = mutableListOf<PsiClass>()
+
+        toProcess.addAll(classes)
+        var depth = 0
+
+        while (toProcess.isNotEmpty() && depth < maxDepth) {
+            val current = toProcess.removeAt(0)
+            if (processed.contains(current)) continue
+
+            processed.add(current)
+            allClasses.add(current)
+
+            // Collect superclasses
+            val superclasses = getAllSuperclasses(current)
+            superclasses.forEach { superClass ->
+                if (!processed.contains(superClass) && !toProcess.contains(superClass)) {
+                    toProcess.add(superClass)
+                }
+            }
+
+            // Collect field type dependencies
+            val fieldDependencies = getFieldTypeDependencies(current)
+            fieldDependencies.forEach { dependency ->
+                if (!processed.contains(dependency) && !toProcess.contains(dependency)) {
+                    toProcess.add(dependency)
+                }
+            }
+
+            depth++
+        }
+
+        // Return sorted by hierarchy (dependencies first)
+        return sortByDependencyOrder(allClasses.toList(), classes)
+    }
+
+    /**
+     * Sort classes so dependencies come before classes that depend on them.
+     */
+    private fun sortByDependencyOrder(allClasses: List<PsiClass>, originalClasses: List<PsiClass>): List<PsiClass> {
+        val sorted = mutableListOf<PsiClass>()
+        val remaining = allClasses.toMutableList()
+
+        // Keep adding classes whose dependencies are already in sorted list
+        while (remaining.isNotEmpty()) {
+            val previousSize = sorted.size
+
+            val canAdd = remaining.filter { psiClass ->
+                val superClass = getNonObjectSuperclass(psiClass)
+                val fieldDeps = getFieldTypeDependencies(psiClass)
+
+                // All dependencies must be in sorted already (or not in our generation set)
+                val superOk = superClass == null || !remaining.contains(superClass) || sorted.contains(superClass)
+                val fieldsOk = fieldDeps.all { dep -> !remaining.contains(dep) || sorted.contains(dep) }
+
+                superOk && fieldsOk
+            }
+
+            sorted.addAll(canAdd)
+            remaining.removeAll(canAdd)
+
+            // Break if no progress (circular dependency)
+            if (sorted.size == previousSize) {
+                sorted.addAll(remaining)
+                break
+            }
+        }
+
+        return sorted
+    }
 }

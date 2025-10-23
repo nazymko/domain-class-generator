@@ -10,7 +10,8 @@ import com.intellij.psi.*
  */
 class DomainClassGenerator(
     private val project: Project,
-    private val config: GeneratorConfig
+    private val config: GeneratorConfig,
+    private val classesBeingGenerated: Set<PsiClass> = emptySet()
 ) {
 
     /**
@@ -92,8 +93,8 @@ class DomainClassGenerator(
             if (superClass != null) {
                 val superFqn = PsiHelper.getFqn(superClass)
                 if (superFqn != null && !superFqn.startsWith("java.lang.")) {
-                    // Check if superclass is from source package
-                    if (PsiHelper.belongsToPackage(superClass, config.sourcePackage)) {
+                    // Check if superclass is being generated (in our batch)
+                    if (classesBeingGenerated.contains(superClass)) {
                         // Import from target package instead
                         val superSimpleName = PsiHelper.getSimpleNameFromFqn(superFqn)
                         imports.add("import ${config.targetPackage}.$superSimpleName;")
@@ -117,8 +118,8 @@ class DomainClassGenerator(
                 if (resolvedClass != null) {
                     val fqn = PsiHelper.getFqn(resolvedClass)
                     if (fqn != null && !fqn.startsWith("java.lang.") && fqn.contains('.')) {
-                        // Check if it's from source package, then use target package
-                        if (PsiHelper.belongsToPackage(resolvedClass, config.sourcePackage)) {
+                        // Check if it's being generated (in our batch), then use target package
+                        if (classesBeingGenerated.contains(resolvedClass)) {
                             val simpleName = PsiHelper.getSimpleNameFromFqn(fqn)
                             imports.add("import ${config.targetPackage}.$simpleName;")
                         } else {
@@ -171,8 +172,8 @@ class DomainClassGenerator(
                 val resolvedClass = type.resolve()
                 val className = if (resolvedClass != null) {
                     val fqn = PsiHelper.getFqn(resolvedClass)
-                    if (fqn != null && PsiHelper.belongsToPackage(resolvedClass, config.sourcePackage)) {
-                        // Use simple name for classes from source package (will be in target package)
+                    // Use simple name for classes being generated (will be in target package)
+                    if (fqn != null && classesBeingGenerated.contains(resolvedClass)) {
                         PsiHelper.getSimpleNameFromFqn(fqn)
                     } else {
                         resolvedClass.name ?: type.presentableText

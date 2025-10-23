@@ -5,6 +5,8 @@ import com.example.domaingenerator.models.GeneratorConfig
 import com.example.domaingenerator.utils.NotificationHelper
 import com.example.domaingenerator.utils.PsiHelper
 import com.intellij.ide.highlighter.JavaFileType
+import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
@@ -50,42 +52,67 @@ class DomainGeneratorService(private val project: Project) {
      */
     private fun performGeneration(config: GeneratorConfig, indicator: ProgressIndicator) {
         indicator.isIndeterminate = false
-        indicator.text = "Scanning source package..."
 
-        // Find all classes in source package
-        val sourceClasses = PsiHelper.findClassesInPackageRecursive(project, config.sourcePackage)
+        // Determine which classes to generate (PSI read operation)
+        val classesToGenerate = runReadAction {
+            val initialClasses = if (config.singleClassMode && config.singleClass != null) {
+                // Single class mode
+                indicator.text = "Generating domain class for ${config.singleClass.name}..."
+                listOf(config.singleClass)
+            } else {
+                // Package mode - scan entire package
+                indicator.text = "Scanning source package..."
 
-        if (sourceClasses.isEmpty()) {
-            NotificationHelper.showWarning(
-                project,
-                "No classes found in package: ${config.sourcePackage}"
-            )
-            return
-        }
+                val sourceClasses = PsiHelper.findClassesInPackageRecursive(project, config.sourcePackage)
 
-        // Filter out interfaces, enums, and abstract classes if desired
-        val classesToGenerate = sourceClasses.filter { psiClass ->
-            !PsiHelper.isInterface(psiClass) && !PsiHelper.isEnum(psiClass)
+                if (sourceClasses.isEmpty()) {
+                    NotificationHelper.showWarning(
+                        project,
+                        "No classes found in package: ${config.sourcePackage}"
+                    )
+                    return@runReadAction emptyList()
+                }
+
+                // Filter out interfaces, enums
+                val filtered = sourceClasses.filter { psiClass ->
+                    !PsiHelper.isInterface(psiClass) && !PsiHelper.isEnum(psiClass)
+                }
+
+                if (filtered.isEmpty()) {
+                    NotificationHelper.showWarning(
+                        project,
+                        "No suitable classes found to generate from (excluded interfaces and enums)"
+                    )
+                    return@runReadAction emptyList()
+                }
+
+                indicator.text = "Found ${filtered.size} classes to generate"
+                filtered
+            }
+
+            // Include all dependencies (superclasses and field types)
+            if (initialClasses.isNotEmpty()) {
+                indicator.text = "Collecting dependencies (superclasses and field types)..."
+                val withDependencies = PsiHelper.collectAllDependencies(initialClasses)
+                indicator.text = "Found ${withDependencies.size} classes including all dependencies"
+                withDependencies
+            } else {
+                initialClasses
+            }
         }
 
         if (classesToGenerate.isEmpty()) {
             NotificationHelper.showWarning(
                 project,
-                "No suitable classes found to generate from (excluded interfaces and enums)"
+                "No classes selected for generation"
             )
             return
         }
 
-        indicator.text = "Found ${classesToGenerate.size} classes to generate"
+        // Classes are already sorted by dependency order from collectAllDependencies
+        // No need to sort again
 
-        // Sort classes by inheritance hierarchy (superclasses first)
-        val sortedClasses = if (config.followInheritance) {
-            sortByInheritanceHierarchy(classesToGenerate)
-        } else {
-            classesToGenerate
-        }
-
-        // Find or create target package directory
+        // Find or create target package directory (mixed read/write operations)
         val targetDirectory = findOrCreatePackageDirectory(config.targetPackage)
         if (targetDirectory == null) {
             NotificationHelper.showError(
@@ -95,18 +122,27 @@ class DomainGeneratorService(private val project: Project) {
             return
         }
 
-        // Generate classes
-        val generator = DomainClassGenerator(project, config)
+        // Generate classes - pass the set of classes being generated for import resolution
+        val classesSet = classesToGenerate.toSet()
+        val generator = DomainClassGenerator(project, config, classesSet)
         val generatedFiles = mutableListOf<PsiFile>()
 
-        sortedClasses.forEachIndexed { index, sourceClass ->
+        classesToGenerate.forEachIndexed { index, sourceClass ->
             if (indicator.isCanceled) return
 
-            indicator.fraction = (index + 1).toDouble() / sortedClasses.size
-            indicator.text = "Generating ${sourceClass.name}..."
+            indicator.fraction = (index + 1).toDouble() / classesToGenerate.size
+
+            // Read class name in read action
+            val className = runReadAction { sourceClass.name ?: "UnknownClass" }
+            indicator.text = "Generating $className..."
 
             try {
-                val generatedClass = generator.generateDomainClass(sourceClass)
+                // Generate class code (PSI read operation)
+                val generatedClass = runReadAction {
+                    generator.generateDomainClass(sourceClass)
+                }
+
+                // Write file (write operation)
                 val psiFile = createJavaFile(
                     targetDirectory,
                     generatedClass.className,
@@ -118,7 +154,7 @@ class DomainGeneratorService(private val project: Project) {
             } catch (e: Exception) {
                 NotificationHelper.showWarning(
                     project,
-                    "Failed to generate ${sourceClass.name}: ${e.message}"
+                    "Failed to generate $className: ${e.message}"
                 )
             }
         }
@@ -129,48 +165,15 @@ class DomainGeneratorService(private val project: Project) {
             "Successfully generated ${generatedFiles.size} domain classes in ${config.targetPackage}"
         )
 
-        // Open first generated file
+        // Open first generated file on EDT
         if (generatedFiles.isNotEmpty()) {
-            generatedFiles.first().virtualFile?.let { virtualFile ->
-                FileEditorManager.getInstance(project).openFile(virtualFile, true)
+            val firstFile = generatedFiles.first().virtualFile
+            if (firstFile != null) {
+                invokeLater {
+                    FileEditorManager.getInstance(project).openFile(firstFile, true)
+                }
             }
         }
-    }
-
-    /**
-     * Sort classes by inheritance hierarchy (superclasses first).
-     */
-    private fun sortByInheritanceHierarchy(classes: List<PsiClass>): List<PsiClass> {
-        val sorted = mutableListOf<PsiClass>()
-        val remaining = classes.toMutableList()
-
-        // Add classes without superclasses (or with external superclasses) first
-        val withoutLocalSuper = remaining.filter { psiClass ->
-            val superClass = PsiHelper.getNonObjectSuperclass(psiClass)
-            superClass == null || !remaining.contains(superClass)
-        }
-        sorted.addAll(withoutLocalSuper)
-        remaining.removeAll(withoutLocalSuper)
-
-        // Keep adding classes whose superclasses are already in sorted list
-        var previousSize = sorted.size
-        while (remaining.isNotEmpty()) {
-            val canAdd = remaining.filter { psiClass ->
-                val superClass = PsiHelper.getNonObjectSuperclass(psiClass)
-                superClass == null || sorted.contains(superClass)
-            }
-            sorted.addAll(canAdd)
-            remaining.removeAll(canAdd)
-
-            // Break if no progress (circular dependency or other issue)
-            if (sorted.size == previousSize) {
-                sorted.addAll(remaining)
-                break
-            }
-            previousSize = sorted.size
-        }
-
-        return sorted
     }
 
     /**
@@ -184,13 +187,17 @@ class DomainGeneratorService(private val project: Project) {
             ?: projectDir.findFileByRelativePath("src")
             ?: return null
 
-        val psiManager = PsiManager.getInstance(project)
-        var currentDir = psiManager.findDirectory(srcMainJava) ?: return null
+        // Find initial directory in read action
+        var currentDir = runReadAction {
+            val psiManager = PsiManager.getInstance(project)
+            psiManager.findDirectory(srcMainJava)
+        } ?: return null
 
         // Create package directories
         val segments = packageName.split(".")
         for (segment in segments) {
             currentDir = WriteCommandAction.runWriteCommandAction<PsiDirectory>(project) {
+                // Read and write in same action
                 currentDir.findSubdirectory(segment) ?: currentDir.createSubdirectory(segment)
             }
         }

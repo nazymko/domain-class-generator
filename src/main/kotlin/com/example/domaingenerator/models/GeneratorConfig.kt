@@ -1,5 +1,7 @@
 package com.example.domaingenerator.models
 
+import com.intellij.psi.PsiClass
+
 /**
  * Configuration for domain class generation.
  */
@@ -8,7 +10,9 @@ data class GeneratorConfig(
     val targetPackage: String,
     val lombokAnnotations: LombokAnnotations,
     val generateGettersSetters: Boolean = false,
-    val followInheritance: Boolean = true
+    val followInheritance: Boolean = true,
+    val singleClassMode: Boolean = false,
+    val singleClass: PsiClass? = null
 )
 
 /**

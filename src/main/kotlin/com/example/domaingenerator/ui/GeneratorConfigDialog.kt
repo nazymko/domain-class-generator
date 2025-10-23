@@ -2,9 +2,13 @@ package com.example.domaingenerator.ui
 
 import com.example.domaingenerator.models.GeneratorConfig
 import com.example.domaingenerator.models.LombokAnnotations
+import com.example.domaingenerator.utils.PackageHelper
+import com.intellij.ide.util.PackageChooserDialog
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.psi.PsiClass
 import com.intellij.ui.dsl.builder.*
 import javax.swing.JComponent
 
@@ -13,12 +17,19 @@ import javax.swing.JComponent
  * Allows users to select source/target packages and Lombok annotations.
  */
 class GeneratorConfigDialog(
-    private val project: Project
+    private val project: Project,
+    private val detectedClass: PsiClass? = null,
+    private val detectedPackage: String? = null
 ) : DialogWrapper(project) {
 
     // Package configuration
-    private var sourcePackage: String = ""
+    private var sourcePackage: String = detectedPackage ?: ""
     private var targetPackage: String = ""
+    private lateinit var targetPackageField: TextFieldWithBrowseButton
+
+    // Detected class info
+    private val detectedClassName = detectedClass?.name
+    private val detectedClassFqn = detectedClass?.qualifiedName
 
     // Lombok annotation options
     private var useData: Boolean = false
@@ -34,27 +45,107 @@ class GeneratorConfigDialog(
     private var generateGettersSetters: Boolean = false
     private var followInheritance: Boolean = true
 
+    // Generation scope
+    private var generateSingleClass: Boolean = detectedClass != null
+    private var generateMode: String = if (detectedClass != null) "single" else "package"
+
     init {
         title = "Generate Domain Classes"
+
+        // Get suggested packages
+        val suggestedPackages = if (sourcePackage.isNotEmpty()) {
+            PackageHelper.getSuggestedTargetPackages(project, sourcePackage)
+        } else {
+            emptyList()
+        }
+
+        // Pre-fill target package with first suggestion
+        if (suggestedPackages.isNotEmpty()) {
+            targetPackage = suggestedPackages.first()
+        }
+
         init()
     }
 
     override fun createCenterPanel(): JComponent {
         return panel {
+            // Show detected class info if available
+            if (detectedClassName != null) {
+                group("Detected Context") {
+                    row("Class:") {
+                        label("<html><b>$detectedClassName</b></html>")
+                    }
+                    if (detectedClassFqn != null) {
+                        row("Full Name:") {
+                            label(detectedClassFqn)
+                                .comment("This is the class at your cursor or from the current file")
+                        }
+                    }
+                }
+            }
+
             group("Package Configuration") {
                 row("Source Package:") {
                     textField()
                         .bindText(::sourcePackage.toMutableProperty())
                         .columns(40)
-                        .comment("Full package name of library classes (e.g., com.library.models)")
-                        .focused()
+                        .comment("Package to scan for library classes (auto-detected from current file)")
+                        .apply {
+                            if (detectedPackage.isNullOrEmpty()) {
+                                focused()
+                            }
+                        }
                 }
 
                 row("Target Package:") {
-                    textField()
-                        .bindText(::targetPackage.toMutableProperty())
+                    targetPackageField = TextFieldWithBrowseButton().apply {
+                        text = targetPackage
+                        addActionListener {
+                            // Open native JetBrains package chooser dialog
+                            val chooser = PackageChooserDialog(
+                                "Choose Target Package",
+                                project
+                            )
+                            chooser.selectPackage(text)
+                            chooser.show()
+
+                            val selectedPackage = chooser.selectedPackage
+                            if (selectedPackage != null) {
+                                text = selectedPackage.qualifiedName
+                                targetPackage = selectedPackage.qualifiedName
+                            }
+                        }
+                    }
+
+                    cell(targetPackageField)
                         .columns(40)
-                        .comment("Full package name for generated domain classes (e.g., com.myapp.domain)")
+                        .comment("Click browse to select package, or type manually")
+                        .apply {
+                            focused()
+                        }
+                }
+
+                row {
+                    comment("""
+                        <b>Tip:</b> Click the folder icon to browse packages, or type a package name.
+                        The generator will scan all classes in the source package.
+                    """.trimIndent())
+                }
+            }
+
+            // Generation scope (only show if class is detected)
+            if (detectedClass != null) {
+                group("Generation Scope") {
+                    buttonsGroup {
+                        row {
+                            radioButton("Generate only: ${detectedClassName}", "single")
+                                .comment("Generate domain class only for the detected class")
+                        }
+                        row {
+                            radioButton("Generate entire package: $sourcePackage", "package")
+                                .comment("Generate domain classes for all classes in the source package")
+                        }
+                    }.bind(::generateMode.toMutableProperty())
                 }
             }
 
@@ -122,12 +213,6 @@ class GeneratorConfigDialog(
                 }
             }
 
-            row {
-                comment("""
-                    <b>Tip:</b> The plugin will scan all classes in the source package and generate
-                    corresponding domain classes in the target package with the selected annotations.
-                """.trimIndent())
-            }
         }
     }
 
@@ -135,23 +220,27 @@ class GeneratorConfigDialog(
      * Validate user input before closing dialog.
      */
     override fun doValidate(): ValidationInfo? {
+        // Update targetPackage from text field
+        targetPackage = targetPackageField.text.trim()
+
         if (sourcePackage.isBlank()) {
-            return ValidationInfo("Source package cannot be empty", null)
+            return ValidationInfo("Source package cannot be empty")
         }
         if (targetPackage.isBlank()) {
-            return ValidationInfo("Target package cannot be empty", null)
+            return ValidationInfo("Target package cannot be empty")
         }
         if (sourcePackage == targetPackage) {
-            return ValidationInfo("Source and target packages must be different", null)
+            return ValidationInfo("Source and target packages must be different")
         }
-        // Package name validation (basic)
-        val packageRegex = Regex("^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*$")
-        if (!sourcePackage.matches(packageRegex)) {
-            return ValidationInfo("Invalid source package name format", null)
+
+        // Package name validation
+        if (!PackageHelper.isValidPackageName(sourcePackage)) {
+            return ValidationInfo("Invalid source package name format. Use lowercase letters and dots (e.g., com.example.models)")
         }
-        if (!targetPackage.matches(packageRegex)) {
-            return ValidationInfo("Invalid target package name format", null)
+        if (!PackageHelper.isValidPackageName(targetPackage)) {
+            return ValidationInfo("Invalid target package name format. Use lowercase letters and dots (e.g., com.example.domain)")
         }
+
         return null
     }
 
@@ -159,6 +248,8 @@ class GeneratorConfigDialog(
      * Get the configuration from dialog inputs.
      */
     fun getConfiguration(): GeneratorConfig {
+        val singleClassMode = generateMode == "single" && detectedClass != null
+
         return GeneratorConfig(
             sourcePackage = sourcePackage.trim(),
             targetPackage = targetPackage.trim(),
@@ -173,7 +264,9 @@ class GeneratorConfigDialog(
                 useEqualsAndHashCode = useEqualsAndHashCode
             ),
             generateGettersSetters = generateGettersSetters,
-            followInheritance = followInheritance
+            followInheritance = followInheritance,
+            singleClassMode = singleClassMode,
+            singleClass = if (singleClassMode) detectedClass else null
         )
     }
 }

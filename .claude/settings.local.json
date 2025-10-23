@@ -4,7 +4,8 @@
       "Bash(if [ -f \"C:\\Users\\User\\IdeaProjects\\demo5\\gradle.properties\" ])",
       "Bash(then echo \"exists\")",
       "Bash(else echo \"not found\")",
-      "Bash(fi)"
+      "Bash(fi)",
+      "Bash(./gradlew:*)"
     ],
     "deny": [],
     "ask": []
