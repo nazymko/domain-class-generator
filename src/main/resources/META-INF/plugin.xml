@@ -1,0 +1,68 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+    <id>com.example.domaingenerator</id>
+
+    <!-- Public plugin name should be written in Title Case.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
+    <name>Domain Class Generator</name>
+
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor url="https://www.yourcompany.com">YourCompany</vendor>
+
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
+    <description><![CDATA[
+    <h2>Domain Class Generator</h2>
+    <p>Generate domain classes from library classes with Lombok annotations support.</p>
+
+    <h3>Features</h3>
+    <ul>
+        <li>Generate domain classes from any library package to your target package</li>
+        <li>Automatically follows extension/superclass structure where possible</li>
+        <li>Configure Lombok annotations (@Builder, @Data, @Getter, @Setter, etc.) per class</li>
+        <li>Easy-to-use configuration UI for package selection and annotation options</li>
+        <li>Keyboard shortcut: Ctrl+Shift+E</li>
+    </ul>
+
+    <h3>Usage</h3>
+    <p>
+      1. Place your cursor in any Java file<br/>
+      2. Press Ctrl+Shift+E (or Cmd+Shift+E on Mac)<br/>
+      3. Select the source package (library classes)<br/>
+      4. Select the target package (where to generate classes)<br/>
+      5. Choose Lombok annotations to add<br/>
+      6. Click OK to generate!
+    </p>
+  ]]></description>
+
+    <!-- Product and plugin compatibility requirements.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+    <depends>com.intellij.modules.platform</depends>
+    <!-- Required for Java PSI support -->
+    <depends>com.intellij.java</depends>
+
+    <!-- Actions: User-triggerable operations -->
+    <actions>
+        <action id="com.example.domaingenerator.GenerateDomainClassesAction"
+                class="com.example.domaingenerator.actions.GenerateDomainClassesAction"
+                text="Generate Domain Classes"
+                description="Generate domain classes from library classes with Lombok annotations">
+            <!-- Add to editor and project view menus -->
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <!-- Windows/Linux shortcut -->
+            <keyboard-shortcut first-keystroke="ctrl shift E" keymap="$default"/>
+            <!-- macOS shortcut -->
+            <keyboard-shortcut first-keystroke="meta shift E" keymap="Mac OS X"/>
+        </action>
+    </actions>
+
+    <!-- Extension points defined by the plugin.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Notification group for showing messages to users -->
+        <notificationGroup id="DomainGenerator.Notifications"
+                          displayType="BALLOON"/>
+    </extensions>
+</idea-plugin>
