@@ -4,6 +4,7 @@ import com.example.domaingenerator.models.GeneratorConfig
 import com.example.domaingenerator.models.LombokAnnotations
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.ui.dsl.builder.*
 import javax.swing.JComponent
 
