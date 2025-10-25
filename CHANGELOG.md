@@ -120,9 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Support & Contribution
 
-- **Issues**: Report bugs and feature requests on [GitHub Issues](https://github.com/domain-class-generator/issues)
-- **Discussions**: Join community discussions on [GitHub Discussions](https://github.com/domain-class-generator/discussions)
-- **Documentation**: Visit our [Wiki](https://github.com/domain-class-generator/wiki)
+- **Issues**: Report bugs and feature requests on [GitHub Issues](https://github.com/nazymko/domain-class-generator/issues)
+- **Discussions**: Join community discussions on [GitHub Discussions](https://github.com/nazymko/domain-class-generator/discussions)
+- **Documentation**: Visit our [Wiki](https://github.com/nazymko/domain-class-generator/wiki)
 
 ---
 

@@ -6,7 +6,10 @@
       "Bash(else echo \"not found\")",
       "Bash(fi)",
       "Bash(./gradlew:*)",
-      "Bash(dir \"C:\\Users\\User\\IdeaProjects\\demo5\\build\\distributions\")"
+      "Bash(dir \"C:\\Users\\User\\IdeaProjects\\demo5\\build\\distributions\")",
+      "Bash(dir \"C:\\Users\\User\\IdeaProjects\\demo5\\build\\libs\")",
+      "Bash(dir:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

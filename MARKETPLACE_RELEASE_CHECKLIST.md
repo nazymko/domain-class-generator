@@ -18,7 +18,7 @@ This checklist ensures your plugin is ready for JetBrains Marketplace publicatio
 - [x] Vendor information updated:
   - Name: `Domain Class Generator Team`
   - Email: `support@domaingenerator.dev`
-  - URL: `https://github.com/domain-class-generator`
+  - URL: `https://github.com/nazymko/domain-class-generator`
 - [x] Description includes:
   - Problem statement (why use this plugin)
   - Feature list
@@ -91,7 +91,7 @@ This checklist ensures your plugin is ready for JetBrains Marketplace publicatio
 4. Fill in additional information:
    - Tags: `code-generation`, `domain-model`, `lombok`, `dependency-injection`
    - License: MIT
-   - Source code: https://github.com/domain-class-generator
+   - Source code: https://github.com/nazymko/domain-class-generator
 
 ### Step 3: Marketplace Listing
 Complete the following sections on the marketplace page:
