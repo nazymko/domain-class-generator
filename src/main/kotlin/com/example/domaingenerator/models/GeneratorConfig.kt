@@ -11,6 +11,7 @@ data class GeneratorConfig(
     val lombokAnnotations: LombokAnnotations,
     val generateGettersSetters: Boolean = false,
     val followInheritance: Boolean = true,
+    val generateJavaDocs: Boolean = true,
     val singleClassMode: Boolean = false,
     val singleClass: PsiClass? = null
 )

@@ -44,6 +44,7 @@ class GeneratorConfigDialog(
     // Additional options
     private var generateGettersSetters: Boolean = false
     private var followInheritance: Boolean = true
+    private var generateJavaDocs: Boolean = true
 
     // Generation scope
     private var generateSingleClass: Boolean = detectedClass != null
@@ -52,19 +53,33 @@ class GeneratorConfigDialog(
     init {
         title = "Generate Domain Classes"
 
-        // Get suggested packages
-        val suggestedPackages = if (sourcePackage.isNotEmpty()) {
-            PackageHelper.getSuggestedTargetPackages(project, sourcePackage)
-        } else {
-            emptyList()
-        }
-
-        // Pre-fill target package with first suggestion
-        if (suggestedPackages.isNotEmpty()) {
-            targetPackage = suggestedPackages.first()
+        // Pre-fill target package with simple heuristic (no slow operations)
+        if (sourcePackage.isNotEmpty()) {
+            targetPackage = getSuggestedTargetPackage(sourcePackage)
         }
 
         init()
+    }
+
+    /**
+     * Generate a simple target package suggestion from source package.
+     * This is a fast, string-based heuristic that doesn't require scanning the project.
+     */
+    private fun getSuggestedTargetPackage(sourcePackage: String): String {
+        // If source contains "library" or "external", replace with "domain"
+        when {
+            sourcePackage.contains("library") -> {
+                return sourcePackage.replace("library", "domain")
+            }
+            sourcePackage.contains("external") -> {
+                return sourcePackage.replace("external", "domain")
+            }
+            else -> {
+                // Otherwise, suggest replacing the last segment with "domain"
+                val basePkg = sourcePackage.substringBeforeLast(".", sourcePackage)
+                return if (basePkg.isNotEmpty()) "$basePkg.domain" else "domain"
+            }
+        }
     }
 
     override fun createCenterPanel(): JComponent {
@@ -78,7 +93,6 @@ class GeneratorConfigDialog(
                     if (detectedClassFqn != null) {
                         row("Full Name:") {
                             label(detectedClassFqn)
-                                .comment("This is the class at your cursor or from the current file")
                         }
                     }
                 }
@@ -89,7 +103,14 @@ class GeneratorConfigDialog(
                     textField()
                         .bindText(::sourcePackage.toMutableProperty())
                         .columns(40)
-                        .comment("Package to scan for library classes (auto-detected from current file)")
+                        .validationOnInput {
+                            when {
+                                it.text.isBlank() -> error("Source package cannot be empty")
+                                !PackageHelper.isValidPackageName(it.text) -> error("Invalid package name format")
+                                it.text == targetPackageField.text -> error("Source and target must be different")
+                                else -> null
+                            }
+                        }
                         .apply {
                             if (detectedPackage.isNullOrEmpty()) {
                                 focused()
@@ -115,21 +136,35 @@ class GeneratorConfigDialog(
                                 targetPackage = selectedPackage.qualifiedName
                             }
                         }
+
+                        // Add document listener to update targetPackage variable
+                        textField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                            override fun insertUpdate(e: javax.swing.event.DocumentEvent?) {
+                                targetPackage = textField.text.trim()
+                            }
+                            override fun removeUpdate(e: javax.swing.event.DocumentEvent?) {
+                                targetPackage = textField.text.trim()
+                            }
+                            override fun changedUpdate(e: javax.swing.event.DocumentEvent?) {
+                                targetPackage = textField.text.trim()
+                            }
+                        })
                     }
 
                     cell(targetPackageField)
                         .columns(40)
-                        .comment("Click browse to select package, or type manually")
+                        .validationOnInput {
+                            val text = targetPackageField.text.trim()
+                            when {
+                                text.isBlank() -> error("Target package cannot be empty")
+                                !PackageHelper.isValidPackageName(text) -> error("Invalid package name format")
+                                text == sourcePackage -> error("Source and target must be different")
+                                else -> null
+                            }
+                        }
                         .apply {
                             focused()
                         }
-                }
-
-                row {
-                    comment("""
-                        <b>Tip:</b> Click the folder icon to browse packages, or type a package name.
-                        The generator will scan all classes in the source package.
-                    """.trimIndent())
                 }
             }
 
@@ -139,11 +174,9 @@ class GeneratorConfigDialog(
                     buttonsGroup {
                         row {
                             radioButton("Generate only: ${detectedClassName}", "single")
-                                .comment("Generate domain class only for the detected class")
                         }
                         row {
                             radioButton("Generate entire package: $sourcePackage", "package")
-                                .comment("Generate domain classes for all classes in the source package")
                         }
                     }.bind(::generateMode.toMutableProperty())
                 }
@@ -153,49 +186,26 @@ class GeneratorConfigDialog(
                 row {
                     checkBox("@Data")
                         .bindSelected(::useData.toMutableProperty())
-                        .comment("Generates getters, setters, toString, equals, and hashCode")
-                }
-
-                row {
                     checkBox("@Builder")
                         .bindSelected(::useBuilder.toMutableProperty())
-                        .comment("Generates builder pattern for object construction")
-                }
-
-                row {
                     checkBox("@Getter")
                         .bindSelected(::useGetter.toMutableProperty())
-                        .comment("Generates getter methods for all fields")
-                }
-
-                row {
                     checkBox("@Setter")
                         .bindSelected(::useSetter.toMutableProperty())
-                        .comment("Generates setter methods for all fields")
                 }
 
                 row {
                     checkBox("@NoArgsConstructor")
                         .bindSelected(::useNoArgsConstructor.toMutableProperty())
-                        .comment("Generates no-argument constructor")
-                }
-
-                row {
                     checkBox("@AllArgsConstructor")
                         .bindSelected(::useAllArgsConstructor.toMutableProperty())
-                        .comment("Generates constructor with all arguments")
                 }
 
                 row {
                     checkBox("@ToString")
                         .bindSelected(::useToString.toMutableProperty())
-                        .comment("Generates toString method")
-                }
-
-                row {
                     checkBox("@EqualsAndHashCode")
                         .bindSelected(::useEqualsAndHashCode.toMutableProperty())
-                        .comment("Generates equals and hashCode methods")
                 }
             }
 
@@ -203,13 +213,13 @@ class GeneratorConfigDialog(
                 row {
                     checkBox("Follow inheritance structure")
                         .bindSelected(::followInheritance.toMutableProperty())
-                        .comment("Generated classes will extend from library superclasses if present")
+                    checkBox("Generate JavaDocs")
+                        .bindSelected(::generateJavaDocs.toMutableProperty())
                 }
 
                 row {
                     checkBox("Generate manual getters/setters (if no Lombok)")
                         .bindSelected(::generateGettersSetters.toMutableProperty())
-                        .comment("Only applies if no Lombok getter/setter annotations are selected")
                 }
             }
 
@@ -265,6 +275,7 @@ class GeneratorConfigDialog(
             ),
             generateGettersSetters = generateGettersSetters,
             followInheritance = followInheritance,
+            generateJavaDocs = generateJavaDocs,
             singleClassMode = singleClassMode,
             singleClass = if (singleClassMode) detectedClass else null
         )

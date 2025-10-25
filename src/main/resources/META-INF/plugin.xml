@@ -5,7 +5,7 @@
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
-    <name>Domain Class Generator</name>
+    <name>Domain Class Generator (Ctrl+Shift+E)</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
     <vendor url="https://www.yourcompany.com">YourCompany</vendor>
@@ -16,23 +16,43 @@
     <h2>Domain Class Generator</h2>
     <p>Generate domain classes from library classes with Lombok annotations support.</p>
 
+    <h3>Why Use This Plugin?</h3>
+    <p>
+      Using external library data objects directly in your application's domain layer can be <b>unreliable and unsecured</b>:
+    </p>
+    <ul>
+        <li><b>Version Changes:</b> External libraries may change class structures in updates, breaking your code</li>
+        <li><b>Security Risks:</b> Library classes may expose unnecessary fields or methods that create vulnerabilities</li>
+        <li><b>Tight Coupling:</b> Direct dependency on external models makes your domain fragile and hard to maintain</li>
+        <li><b>Lack of Control:</b> You cannot customize serialization, validation, or behavior of library classes</li>
+        <li><b>Testing Difficulties:</b> Mocking and testing with external library objects is often complex</li>
+    </ul>
+    <p>
+      <b>Solution:</b> This plugin helps you create <b>your own copy</b> of the class structure in your domain layer,
+      giving you full control, stability, and security. You can then map between external objects and your domain models
+      using tools like MapStruct or ModelMapper.
+    </p>
+
     <h3>Features</h3>
     <ul>
-        <li>Generate domain classes from any library package to your target package</li>
-        <li>Automatically follows extension/superclass structure where possible</li>
-        <li>Configure Lombok annotations (@Builder, @Data, @Getter, @Setter, etc.) per class</li>
+        <li>Generate domain classes and enums from any library package to your target package</li>
+        <li>Automatically follows extension/superclass structure</li>
+        <li>Preserves enum constructors and constant declarations</li>
+        <li>Configure Lombok annotations (@Builder, @Data, @Getter, @Setter, etc.)</li>
+        <li>Generate JavaDoc documentation with source information</li>
         <li>Easy-to-use configuration UI for package selection and annotation options</li>
-        <li>Keyboard shortcut: Ctrl+Shift+E</li>
+        <li>Keyboard shortcut: Ctrl+Shift+E (Cmd+Shift+E on Mac)</li>
     </ul>
 
     <h3>Usage</h3>
     <p>
-      1. Place your cursor in any Java file<br/>
+      1. Place your cursor in any Java file (library class)<br/>
       2. Press Ctrl+Shift+E (or Cmd+Shift+E on Mac)<br/>
       3. Select the source package (library classes)<br/>
       4. Select the target package (where to generate classes)<br/>
       5. Choose Lombok annotations to add<br/>
-      6. Click OK to generate!
+      6. Enable/disable JavaDoc generation<br/>
+      7. Click OK to generate!
     </p>
   ]]></description>
 

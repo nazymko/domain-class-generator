@@ -78,21 +78,21 @@ object PsiHelper {
     }
 
     /**
-     * Check if a class has a superclass (excluding Object).
+     * Check if a class has a superclass (excluding Object and Enum).
      */
     fun hasNonObjectSuperclass(psiClass: PsiClass): Boolean {
         val superClass = psiClass.superClass ?: return false
         val superFqn = superClass.qualifiedName ?: return false
-        return superFqn != "java.lang.Object"
+        return superFqn != "java.lang.Object" && superFqn != "java.lang.Enum"
     }
 
     /**
-     * Get the superclass if it exists and is not Object.
+     * Get the superclass if it exists and is not Object or Enum.
      */
     fun getNonObjectSuperclass(psiClass: PsiClass): PsiClass? {
         val superClass = psiClass.superClass ?: return null
         val superFqn = superClass.qualifiedName ?: return null
-        return if (superFqn != "java.lang.Object") superClass else null
+        return if (superFqn != "java.lang.Object" && superFqn != "java.lang.Enum") superClass else null
     }
 
     /**
@@ -254,11 +254,10 @@ object PsiHelper {
                 val resolvedClass = type.resolve()
                 if (resolvedClass != null) {
                     val fqn = getFqn(resolvedClass)
-                    // Only collect custom types (not primitives, not java.*, not kotlin.*)
+                    // Only collect custom types (not primitives, not java.*, not kotlin.*, not interfaces)
                     if (fqn != null &&
                         !fqn.startsWith("java.") &&
                         !fqn.startsWith("kotlin.") &&
-                        !isEnum(resolvedClass) &&
                         !isInterface(resolvedClass)) {
                         dependencies.add(resolvedClass)
                     }

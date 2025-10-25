@@ -56,7 +56,7 @@ class DomainGeneratorService(private val project: Project) {
         // Determine which classes to generate (PSI read operation)
         val classesToGenerate = runReadAction {
             val initialClasses = if (config.singleClassMode && config.singleClass != null) {
-                // Single class mode
+                // Single class mode - generate the selected class
                 indicator.text = "Generating domain class for ${config.singleClass.name}..."
                 listOf(config.singleClass)
             } else {
@@ -73,15 +73,15 @@ class DomainGeneratorService(private val project: Project) {
                     return@runReadAction emptyList()
                 }
 
-                // Filter out interfaces, enums
+                // Filter out interfaces only (keep enums)
                 val filtered = sourceClasses.filter { psiClass ->
-                    !PsiHelper.isInterface(psiClass) && !PsiHelper.isEnum(psiClass)
+                    !PsiHelper.isInterface(psiClass)
                 }
 
                 if (filtered.isEmpty()) {
                     NotificationHelper.showWarning(
                         project,
-                        "No suitable classes found to generate from (excluded interfaces and enums)"
+                        "No suitable classes found to generate from (excluded interfaces)"
                     )
                     return@runReadAction emptyList()
                 }
@@ -90,7 +90,7 @@ class DomainGeneratorService(private val project: Project) {
                 filtered
             }
 
-            // Include all dependencies (superclasses and field types)
+            // Include all dependencies (superclasses and field types) for both single and package mode
             if (initialClasses.isNotEmpty()) {
                 indicator.text = "Collecting dependencies (superclasses and field types)..."
                 val withDependencies = PsiHelper.collectAllDependencies(initialClasses)
