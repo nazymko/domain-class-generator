@@ -58,15 +58,13 @@ project-root/
 **CRITICAL**: This file controls your entire plugin build process.
 
 ```kotlin
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.1.0"
-    id("org.jetbrains.intellij.platform") version "2.7.0"
+    id("org.jetbrains.intellij.platform") version "2.5.0"  // Use 2.5.0 for stability
 }
 
-group = "com.yourcompany"
+group = "io.github.yourname.yourplugin"
 version = "1.0.0"
 
 repositories {
@@ -80,7 +78,8 @@ dependencies {
     intellijPlatform {
         // Choose your target IDE
         // IC = IntelliJ Community, IU = IntelliJ Ultimate
-        create("IC", "2023.1")
+        // Using 2023.2 for development while supporting 2023.0+
+        create("IC", "2023.2")
 
         // REQUIRED for Java PSI access (PsiClass, PsiMethod, etc.)
         bundledPlugin("com.intellij.java")
@@ -96,30 +95,42 @@ dependencies {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "230"  // 2023.1
-            untilBuild = "999.*"  // No upper limit
+            sinceBuild = "230"  // IntelliJ IDEA 2023.0+
+            // No untilBuild means compatible with all future versions
         }
 
         changeNotes = """
-            <h3>Version 1.0.0</h3>
+            <h3>Version 1.0.0 - Initial Release</h3>
             <ul>
-                <li>Initial release</li>
+                <li><b>Feature 1:</b> Description with rich HTML</li>
+                <li><b>Feature 2:</b> Another feature</li>
+                <li><b>Keyboard Shortcut:</b> Ctrl+Shift+E for quick access</li>
             </ul>
+            <h4>Why Use This Plugin?</h4>
+            <p>Brief explanation of the problem this plugin solves.</p>
         """.trimIndent()
     }
 }
 
 tasks {
+    // Set the JVM compatibility versions
+    // Java 17 required for IntelliJ 2023.0+ compatibility
     withType<JavaCompile> {
-        sourceCompatibility = "11"
-        targetCompatibility = "11"
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
     }
 
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
+        kotlinOptions.jvmTarget = "17"
     }
 }
 ```
+
+**Key Points:**
+- **Plugin Version**: Use version 2.5.0 for stability (2.7.0 may have issues)
+- **Java Version**: IntelliJ 2023.0+ requires Java 17
+- **IDE Version**: Develop with 2023.2 while supporting 2023.0+ (build 230)
+- **Change Notes**: Support rich HTML formatting for better presentation
 
 ### 3. Configure settings.gradle.kts
 
@@ -638,6 +649,87 @@ object PsiModifier {
 }
 ```
 
+### Working with Enums
+
+**CRITICAL**: Enums require special handling compared to regular classes.
+
+```kotlin
+package com.yourcompany.yourplugin.psi
+
+import com.intellij.psi.*
+
+object EnumHandler {
+
+    /**
+     * Check if a class is an enum.
+     */
+    fun isEnum(psiClass: PsiClass): Boolean {
+        return psiClass.isEnum
+    }
+
+    /**
+     * Get enum constants (not regular fields).
+     */
+    fun getEnumConstants(psiClass: PsiClass): List<PsiEnumConstant> {
+        return psiClass.fields.filterIsInstance<PsiEnumConstant>()
+    }
+
+    /**
+     * Get enum constructors.
+     */
+    fun getEnumConstructors(psiClass: PsiClass): List<PsiMethod> {
+        return psiClass.constructors.toList()
+    }
+
+    /**
+     * Generate enum fields from constructor parameters.
+     * IMPORTANT: Some enum fields only exist implicitly in constructors.
+     */
+    fun getEnumFields(psiClass: PsiClass): List<FieldInfo> {
+        val constructors = psiClass.constructors
+
+        return if (constructors.isNotEmpty()) {
+            // Use constructor parameters as source of truth
+            val primaryConstructor = constructors.first()
+            primaryConstructor.parameterList.parameters.map { param ->
+                FieldInfo(name = param.name!!, type = param.type)
+            }
+        } else {
+            // Fallback to explicit fields (excluding constants)
+            psiClass.fields
+                .filterNot { it is PsiEnumConstant }
+                .filterNot { it.hasModifierProperty(PsiModifier.STATIC) }
+                .map { field -> FieldInfo(name = field.name, type = field.type) }
+        }
+    }
+
+    /**
+     * Generate enum constant initialization.
+     */
+    fun generateEnumConstant(constant: PsiEnumConstant): String {
+        val name = constant.name
+        val args = constant.argumentList?.expressions?.joinToString(", ") {
+            it.text
+        } ?: ""
+
+        return if (args.isNotEmpty()) {
+            "$name($args)"
+        } else {
+            name
+        }
+    }
+
+    data class FieldInfo(val name: String, val type: PsiType)
+}
+```
+
+**Key Enum Challenges:**
+1. **Enum Constants**: Use `PsiEnumConstant` type, not manual checks
+2. **Fields**: May only exist in constructor parameters, not explicit declarations
+3. **Superclass**: Filter out `java.lang.Enum` (like `java.lang.Object`)
+4. **Imports**: Collect from constructor parameters, not just fields
+5. **Initialization**: Preserve enum constant arguments
+
 ---
 
 ## UI Components
@@ -651,8 +743,11 @@ Dialogs are the primary way to get user input.
 ```kotlin
 package com.yourcompany.yourplugin.ui
 
+import com.intellij.ide.util.PackageChooserDialog
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.ui.TextFieldWithBrowseButton
+import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.ui.dsl.builder.*
 import javax.swing.JComponent
 
@@ -660,63 +755,145 @@ import javax.swing.JComponent
  * Configuration dialog using IntelliJ's Kotlin UI DSL.
  */
 class YourConfigDialog(
-    project: Project,
-    private val defaultValue: String = ""
+    private val project: Project,
+    private val detectedPackage: String? = null
 ) : DialogWrapper(project) {
 
-    private var userInput: String = defaultValue
-    private var checkboxValue: Boolean = false
-    private var selectedOption: String = "Option1"
+    // Configuration fields
+    private var sourcePackage: String = detectedPackage ?: ""
+    private var targetPackage: String = ""
+    private lateinit var targetPackageField: TextFieldWithBrowseButton
+
+    private var useFeature: Boolean = false
+    private var generateDocs: Boolean = true
+    private var generationMode: String = "all"
 
     init {
         title = "Configure Your Plugin"
+
+        // IMPORTANT: Only do fast operations here (no file I/O, no PSI scanning)
+        // Use simple heuristics for suggestions
+        if (sourcePackage.isNotEmpty()) {
+            targetPackage = getSuggestedPackage(sourcePackage)
+        }
+
         init()
     }
 
-    override fun createCenterPanel(): JComponent {
-        return panel {
-            row("Input Field:") {
-                textField()
-                    .bindText(::userInput.toMutableProperty())
-                    .columns(30)
-                    .comment("Enter some text here")
-            }
-
-            row {
-                checkBox("Enable feature")
-                    .bindSelected(::checkboxValue.toMutableProperty())
-            }
-
-            buttonsGroup {
-                row("Select option:") {
-                    radioButton("Option 1", "Option1")
-                    radioButton("Option 2", "Option2")
-                    radioButton("Option 3", "Option3")
-                }.bind(::selectedOption.toMutableProperty())
-            }
-
-            row {
-                comment("Additional information here")
+    /**
+     * Fast string-based heuristic (no slow operations on EDT).
+     */
+    private fun getSuggestedPackage(sourcePackage: String): String {
+        return when {
+            sourcePackage.contains("library") -> sourcePackage.replace("library", "domain")
+            sourcePackage.contains("external") -> sourcePackage.replace("external", "domain")
+            else -> {
+                val basePkg = sourcePackage.substringBeforeLast(".", sourcePackage)
+                if (basePkg.isNotEmpty()) "$basePkg.domain" else "domain"
             }
         }
     }
 
-    fun getUserInput(): String = userInput
-    fun isFeatureEnabled(): Boolean = checkboxValue
-    fun getSelectedOption(): String = selectedOption
+    override fun createCenterPanel(): JComponent {
+        return panel {
+            group("Package Configuration") {
+                row("Source Package:") {
+                    textField()
+                        .bindText(::sourcePackage.toMutableProperty())
+                        .columns(40)
+                        .validationOnInput {
+                            when {
+                                it.text.isBlank() -> error("Package cannot be empty")
+                                !isValidPackageName(it.text) -> error("Invalid package format")
+                                else -> null
+                            }
+                        }
+                }
+
+                row("Target Package:") {
+                    // Create browse field with package chooser
+                    targetPackageField = TextFieldWithBrowseButton().apply {
+                        text = targetPackage
+                        addActionListener {
+                            val dialog = PackageChooserDialog(
+                                "Select Target Package",
+                                project
+                            )
+                            dialog.show()
+                            dialog.selectedPackage?.qualifiedName?.let { selected ->
+                                textField.text = selected
+                                targetPackage = selected
+                            }
+                        }
+                    }
+                    cell(targetPackageField)
+                        .validationOnInput {
+                            val text = targetPackageField.text.trim()
+                            when {
+                                text.isBlank() -> error("Target package cannot be empty")
+                                !isValidPackageName(text) -> error("Invalid package format")
+                                text == sourcePackage -> error("Source and target must differ")
+                                else -> null
+                            }
+                        }
+                        .align(AlignX.FILL)
+                }
+            }
+
+            buttonsGroup("Generation Scope") {
+                row {
+                    radioButton("Generate all classes", "all")
+                    radioButton("Single class only", "single")
+                }.bind(::generationMode.toMutableProperty())
+            }
+
+            group("Options") {
+                row {
+                    checkBox("Use feature X")
+                        .bindSelected(::useFeature.toMutableProperty())
+                    checkBox("Generate documentation")
+                        .bindSelected(::generateDocs.toMutableProperty())
+                }
+            }
+        }
+    }
+
+    /**
+     * Validate package name format.
+     */
+    private fun isValidPackageName(packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+        val segments = packageName.split(".")
+        return segments.all { segment ->
+            segment.isNotEmpty() &&
+            segment[0].isJavaIdentifierStart() &&
+            segment.all { it.isJavaIdentifierPart() }
+        }
+    }
+
+    fun getSourcePackage(): String = sourcePackage
+    fun getTargetPackage(): String = targetPackage.trim()
+    fun isFeatureEnabled(): Boolean = useFeature
+    fun shouldGenerateDocs(): Boolean = generateDocs
 }
 
 // Usage:
-fun showDialog(project: Project) {
-    val dialog = YourConfigDialog(project, "default value")
+fun showDialog(project: Project, detectedPackage: String?) {
+    val dialog = YourConfigDialog(project, detectedPackage)
     if (dialog.showAndGet()) {
-        val input = dialog.getUserInput()
-        val enabled = dialog.isFeatureEnabled()
-        val option = dialog.getSelectedOption()
+        val source = dialog.getSourcePackage()
+        val target = dialog.getTargetPackage()
         // Use the values
     }
 }
 ```
+
+**Key Dialog Features:**
+1. **Real-time Validation**: Use `.validationOnInput` for immediate feedback
+2. **Package Chooser**: Use `PackageChooserDialog` for native package selection
+3. **Fast Initialization**: Only use simple heuristics in `init` block (no file I/O)
+4. **Property Binding**: Use `.bindText()` and `.bindSelected()` for automatic sync
+5. **Validation**: Validate package names, prevent duplicates, ensure format
 
 ### 2. Progress Indicators
 
@@ -932,6 +1109,303 @@ object ThreadingHelper {
 - Minimize PSI traversal
 - Use indexes when possible
 - Profile with IntelliJ Profiler
+
+---
+
+## Dependency Collection and Code Generation
+
+### Collecting Class Dependencies
+
+**CRITICAL**: When generating domain classes, you must collect ALL dependencies to ensure complete isolation from library packages.
+
+```kotlin
+package com.yourcompany.yourplugin.dependencies
+
+import com.intellij.psi.*
+
+object DependencyCollector {
+
+    /**
+     * Collect all dependencies for a set of classes.
+     * Includes superclasses and field type dependencies.
+     *
+     * @param initialClasses Classes to start from
+     * @param sourcePackage Package to scan for dependencies
+     * @param maxDepth Maximum recursion depth to prevent infinite loops
+     * @return All classes that need to be generated
+     */
+    fun collectAllDependencies(
+        initialClasses: List<PsiClass>,
+        sourcePackage: String,
+        maxDepth: Int = 10
+    ): List<PsiClass> {
+        val allClasses = mutableSetOf<PsiClass>()
+        val processed = mutableSetOf<PsiClass>()
+        val toProcess = mutableListOf<PsiClass>()
+
+        toProcess.addAll(initialClasses)
+        var depth = 0
+
+        while (toProcess.isNotEmpty() && depth < maxDepth) {
+            val current = toProcess.removeAt(0)
+
+            // Skip if already processed
+            if (processed.contains(current)) continue
+
+            processed.add(current)
+            allClasses.add(current)
+
+            // Collect superclass dependencies
+            val superClass = getNonObjectSuperclass(current)
+            if (superClass != null && belongsToPackage(superClass, sourcePackage)) {
+                if (!processed.contains(superClass) && !toProcess.contains(superClass)) {
+                    toProcess.add(superClass)
+                }
+            }
+
+            // Collect field type dependencies
+            val fieldDependencies = getFieldTypeDependencies(current, sourcePackage)
+            fieldDependencies.forEach { dependency ->
+                if (!processed.contains(dependency) && !toProcess.contains(dependency)) {
+                    toProcess.add(dependency)
+                }
+            }
+
+            depth++
+        }
+
+        // Sort by dependency order (superclasses first)
+        return sortByDependencyOrder(allClasses.toList(), initialClasses)
+    }
+
+    /**
+     * Get superclass (excluding Object and Enum).
+     */
+    private fun getNonObjectSuperclass(psiClass: PsiClass): PsiClass? {
+        val superClass = psiClass.superClass ?: return null
+        val superFqn = superClass.qualifiedName ?: return null
+
+        return if (superFqn != "java.lang.Object" && superFqn != "java.lang.Enum") {
+            superClass
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Get all classes referenced in field types.
+     */
+    private fun getFieldTypeDependencies(
+        psiClass: PsiClass,
+        sourcePackage: String
+    ): List<PsiClass> {
+        val dependencies = mutableListOf<PsiClass>()
+        val fields = psiClass.fields.filterNot {
+            it.hasModifierProperty(PsiModifier.STATIC)
+        }
+
+        fields.forEach { field ->
+            collectTypeClasses(field.type, sourcePackage, dependencies)
+        }
+
+        // Also check constructor parameters for enums
+        if (psiClass.isEnum) {
+            psiClass.constructors.forEach { constructor ->
+                constructor.parameterList.parameters.forEach { param ->
+                    collectTypeClasses(param.type, sourcePackage, dependencies)
+                }
+            }
+        }
+
+        return dependencies
+    }
+
+    /**
+     * Recursively collect classes from a type (handles generics and arrays).
+     */
+    private fun collectTypeClasses(
+        type: PsiType,
+        sourcePackage: String,
+        dependencies: MutableList<PsiClass>
+    ) {
+        when (type) {
+            is PsiClassType -> {
+                val resolvedClass = type.resolve()
+                if (resolvedClass != null && belongsToPackage(resolvedClass, sourcePackage)) {
+                    if (!dependencies.contains(resolvedClass)) {
+                        dependencies.add(resolvedClass)
+                    }
+                }
+                // Recursively handle generic type parameters
+                type.parameters.forEach { paramType ->
+                    collectTypeClasses(paramType, sourcePackage, dependencies)
+                }
+            }
+            is PsiArrayType -> {
+                collectTypeClasses(type.componentType, sourcePackage, dependencies)
+            }
+        }
+    }
+
+    /**
+     * Check if a class belongs to a package.
+     */
+    private fun belongsToPackage(psiClass: PsiClass, packageName: String): Boolean {
+        val classPackage = (psiClass.containingFile as? PsiJavaFile)?.packageName
+        return classPackage?.startsWith(packageName) == true
+    }
+
+    /**
+     * Sort classes by dependency order (superclasses before subclasses).
+     */
+    private fun sortByDependencyOrder(
+        classes: List<PsiClass>,
+        originalOrder: List<PsiClass>
+    ): List<PsiClass> {
+        val sorted = mutableListOf<PsiClass>()
+        val remaining = classes.toMutableSet()
+
+        // Helper to check if all dependencies are already sorted
+        fun canAdd(psiClass: PsiClass): Boolean {
+            val superClass = getNonObjectSuperclass(psiClass)
+            return superClass == null ||
+                   !remaining.contains(superClass) ||
+                   sorted.contains(superClass)
+        }
+
+        // Keep adding classes whose dependencies are satisfied
+        while (remaining.isNotEmpty()) {
+            val toAdd = remaining.filter { canAdd(it) }
+
+            if (toAdd.isEmpty()) {
+                // Circular dependency - just add remaining in original order
+                sorted.addAll(remaining.sortedBy { originalOrder.indexOf(it) })
+                break
+            }
+
+            // Add in original order preference
+            toAdd.sortedBy { originalOrder.indexOf(it) }.forEach { psiClass ->
+                sorted.add(psiClass)
+                remaining.remove(psiClass)
+            }
+        }
+
+        return sorted
+    }
+}
+```
+
+**Key Dependency Collection Points:**
+1. **Breadth-First Search**: Process dependencies level by level
+2. **Depth Limiting**: Prevent infinite loops with `maxDepth` parameter
+3. **Superclass Dependencies**: Always include superclasses from source package
+4. **Field Type Dependencies**: Recursively collect classes from field types
+5. **Generic Types**: Handle `List<CustomClass>`, `Map<K, V>`, etc.
+6. **Dependency Ordering**: Generate superclasses before subclasses
+7. **Package Filtering**: Only collect dependencies from source package
+
+### Generating Import Statements
+
+```kotlin
+package com.yourcompany.yourplugin.codegen
+
+import com.intellij.psi.*
+
+object ImportCollector {
+
+    /**
+     * Collect all necessary imports for a class.
+     */
+    fun collectImports(
+        sourceClass: PsiClass,
+        targetPackage: String,
+        classesBeingGenerated: Set<PsiClass>,
+        additionalImports: List<String> = emptyList()
+    ): Set<String> {
+        val imports = mutableSetOf<String>()
+
+        // Add additional imports (e.g., Lombok annotations)
+        imports.addAll(additionalImports)
+
+        // Collect from fields
+        sourceClass.fields
+            .filterNot { it.hasModifierProperty(PsiModifier.STATIC) }
+            .forEach { field ->
+                collectTypeImports(field.type, targetPackage, classesBeingGenerated, imports)
+            }
+
+        // Collect from constructor parameters (for enums)
+        if (sourceClass.isEnum) {
+            sourceClass.constructors.forEach { constructor ->
+                constructor.parameterList.parameters.forEach { param ->
+                    collectTypeImports(param.type, targetPackage, classesBeingGenerated, imports)
+                }
+            }
+        }
+
+        // Collect from superclass
+        val superClass = sourceClass.superClass
+        if (superClass != null) {
+            val superFqn = superClass.qualifiedName
+            if (superFqn != null &&
+                superFqn != "java.lang.Object" &&
+                superFqn != "java.lang.Enum") {
+
+                if (classesBeingGenerated.contains(superClass)) {
+                    // Superclass is being generated - use target package
+                    imports.add("import $targetPackage.${superClass.name};")
+                } else {
+                    imports.add("import $superFqn;")
+                }
+            }
+        }
+
+        return imports.sorted().toSet()
+    }
+
+    /**
+     * Recursively collect imports from a type.
+     */
+    private fun collectTypeImports(
+        type: PsiType,
+        targetPackage: String,
+        classesBeingGenerated: Set<PsiClass>,
+        imports: MutableSet<String>
+    ) {
+        when (type) {
+            is PsiClassType -> {
+                val resolvedClass = type.resolve()
+                if (resolvedClass != null) {
+                    val fqn = resolvedClass.qualifiedName
+                    if (fqn != null && !fqn.startsWith("java.lang.")) {
+                        // Check if this class is being generated in our batch
+                        if (classesBeingGenerated.contains(resolvedClass)) {
+                            imports.add("import $targetPackage.${resolvedClass.name};")
+                        } else {
+                            imports.add("import $fqn;")
+                        }
+                    }
+                }
+
+                // Recursively handle generic parameters
+                type.parameters.forEach { paramType ->
+                    collectTypeImports(paramType, targetPackage, classesBeingGenerated, imports)
+                }
+            }
+            is PsiArrayType -> {
+                collectTypeImports(type.componentType, targetPackage, classesBeingGenerated, imports)
+            }
+        }
+    }
+}
+```
+
+**Import Collection Best Practices:**
+1. **Filter `java.lang`**: Skip imports for classes in `java.lang` package
+2. **Generated Classes**: Use target package for classes being generated together
+3. **Recursive Collection**: Handle nested generic types properly
+4. **Sort Imports**: Keep imports sorted alphabetically
+5. **Lombok Annotations**: Don't forget annotation imports
 
 ---
 
