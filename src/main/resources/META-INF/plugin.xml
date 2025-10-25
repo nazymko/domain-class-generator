@@ -8,7 +8,9 @@
     <name>Domain Class Generator (Ctrl+Shift+E)</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor url="https://www.yourcompany.com">YourCompany</vendor>
+    <vendor email="support@domaingenerator.dev" url="https://github.com/domain-class-generator">
+        Domain Class Generator Team
+    </vendor>
 
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->

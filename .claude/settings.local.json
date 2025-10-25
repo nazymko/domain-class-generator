@@ -5,7 +5,8 @@
       "Bash(then echo \"exists\")",
       "Bash(else echo \"not found\")",
       "Bash(fi)",
-      "Bash(./gradlew:*)"
+      "Bash(./gradlew:*)",
+      "Bash(dir \"C:\\Users\\User\\IdeaProjects\\demo5\\build\\distributions\")"
     ],
     "deny": [],
     "ask": []
