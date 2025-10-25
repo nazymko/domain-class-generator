@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.5.0"
 }
 
-group = "com.example.domaingenerator"
+group = "io.github.nazymko.domaingenerator"
 version = "1.0.0"
 
 repositories {
@@ -18,7 +18,7 @@ repositories {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
     intellijPlatform {
-        create("IC", "2025.1")
+        create("IC", "2023.2")  // Using 2023.2 for development, supports 2023.0+ (build 230+)
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
 
         // REQUIRED for Java PSI access (PsiClass, PsiMethod, etc.)
@@ -29,8 +29,7 @@ dependencies {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "251"
-            untilBuild = "999.*"  // Compatible with all future versions
+            sinceBuild = "230"  // IntelliJ IDEA 2023.0+
         }
 
         changeNotes = """
@@ -57,12 +56,12 @@ intellijPlatform {
 }
 
 tasks {
-    // Set the JVM compatibility versions
+    // Set the JVM compatibility versions (Java 17 for IntelliJ 2023.0+ compatibility)
     withType<JavaCompile> {
-        sourceCompatibility = "21"
-        targetCompatibility = "21"
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
     }
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        kotlinOptions.jvmTarget = "21"
+        kotlinOptions.jvmTarget = "17"
     }
 }

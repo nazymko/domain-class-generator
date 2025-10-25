@@ -473,7 +473,7 @@ class DomainClassGenerator(
         val superClass = PsiHelper.getNonObjectSuperclass(sourceClass)
 
         // Get plugin information from the plugin descriptor
-        val pluginId = "com.example.domaingenerator"
+        val pluginId = "io.github.nazymko.domaingenerator"
         val plugin = com.intellij.ide.plugins.PluginManagerCore.getPlugin(
             com.intellij.openapi.extensions.PluginId.getId(pluginId)
         )

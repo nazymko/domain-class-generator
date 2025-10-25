@@ -78,10 +78,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error handling with user-friendly notifications
 
 #### Technical Details
-- Minimum IntelliJ version: 2025.1 (build 251)
+- Minimum IntelliJ version: 2023.0 (build 230)
+- Maximum tested version: 2025.1
 - Compatible with: IntelliJ IDEA Community and Ultimate
 - Language: Kotlin 2.1.0
-- JVM Target: Java 21
+- JVM Target: Java 17
 - Requires: com.intellij.java plugin (bundled)
 
 #### Architecture Highlights

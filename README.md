@@ -239,8 +239,8 @@ public class User extends BaseEntity {
 
 ## Requirements
 
-- IntelliJ IDEA 2025.1 or higher
-- Java 21 or higher
+- IntelliJ IDEA 2023.0 or higher (build 230+)
+- Java 17 or higher
 - Java plugin enabled in IDE
 
 ## Build Commands

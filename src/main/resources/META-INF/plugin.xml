@@ -1,7 +1,7 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
-    <id>com.example.domaingenerator</id>
+    <id>io.github.nazymko.domaingenerator</id>
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
@@ -66,7 +66,7 @@
 
     <!-- Actions: User-triggerable operations -->
     <actions>
-        <action id="com.example.domaingenerator.GenerateDomainClassesAction"
+        <action id="io.github.nazymko.domaingenerator.GenerateDomainClassesAction"
                 class="com.example.domaingenerator.actions.GenerateDomainClassesAction"
                 text="Generate Domain Classes"
                 description="Generate domain classes from library classes with Lombok annotations">

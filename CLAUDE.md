@@ -281,18 +281,20 @@ Possible improvements:
 
 ## Dependencies
 
-- IntelliJ Platform SDK 2025.1+
+- IntelliJ Platform SDK 2023.0+ (build 230+)
 - com.intellij.java (bundled plugin for Java PSI support)
 - Kotlin 2.1.0
 - Gradle 8.0+
+- Java 17+
 
 ## Plugin Metadata
 
-- **ID**: com.example.domaingenerator
-- **Name**: Domain Class Generator
-- **Version**: 1.0-SNAPSHOT
-- **Vendor**: YourCompany
-- **Min IDE Version**: 2025.1 (build 251)
+- **ID**: io.github.nazymko.domaingenerator
+- **Name**: Domain Class Generator (Ctrl+Shift+E)
+- **Version**: 1.0.0
+- **Vendor**: Domain Class Generator Team
+- **Min IDE Version**: 2023.0 (build 230)
+- **Supported IDE Versions**: IntelliJ IDEA 2023.0 - 2025.1+
 
 ## Development Notes
 

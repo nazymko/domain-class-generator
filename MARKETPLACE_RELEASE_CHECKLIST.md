@@ -8,12 +8,12 @@ This checklist ensures your plugin is ready for JetBrains Marketplace publicatio
 
 ### Version & Build
 - [x] Version updated to 1.0.0 in `build.gradle.kts`
-- [x] Group ID is correct: `com.example.domaingenerator`
+- [x] Group ID is correct: `io.github.nazymko.domaingenerator`
 - [x] Plugin built successfully: `./gradlew clean build buildPlugin`
 - [x] Distribution ZIP created: `build/distributions/domain-class-generator-1.0.0.zip`
 
 ### Plugin Metadata (plugin.xml)
-- [x] Plugin ID: `com.example.domaingenerator`
+- [x] Plugin ID: `io.github.nazymko.domaingenerator`
 - [x] Plugin Name: `Domain Class Generator (Ctrl+Shift+E)`
 - [x] Vendor information updated:
   - Name: `Domain Class Generator Team`
@@ -24,8 +24,8 @@ This checklist ensures your plugin is ready for JetBrains Marketplace publicatio
   - Feature list
   - Usage instructions
 - [x] IDE version compatibility:
-  - Since Build: 251 (IntelliJ 2025.1)
-  - Until Build: 999.* (all future versions)
+  - Since Build: 230 (IntelliJ 2023.0)
+  - Until Build: Not specified (all future versions)
 - [x] Dependencies declared:
   - `com.intellij.modules.platform`
   - `com.intellij.java`
@@ -122,7 +122,8 @@ Recommended screenshots to create:
 #### Compatibility
 - IntelliJ IDEA Community: ✓
 - IntelliJ IDEA Ultimate: ✓
-- Minimum version: 2025.1
+- Minimum version: 2023.0 (build 230)
+- Tested up to: 2025.1
 
 ### Step 4: Review & Publish
 1. Review all information

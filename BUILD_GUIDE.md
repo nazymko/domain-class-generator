@@ -2,6 +2,14 @@
 
 Complete guide for building the Domain Class Generator plugin in different formats.
 
+## 📋 Plugin Compatibility
+
+- **Minimum IntelliJ Version**: 2023.0 (build 230)
+- **Maximum Tested Version**: 2025.1
+- **Supported IDEs**: IntelliJ IDEA Community & Ultimate
+- **Java Version**: 17+
+- **Kotlin Version**: 2.1.0
+
 ---
 
 ## 🔨 Build Commands
@@ -264,6 +272,44 @@ Before building for release:
 - [ ] Distribution created: `./gradlew buildPlugin`
 - [ ] ZIP file exists: `build/distributions/*.zip`
 - [ ] Tested in sandbox: `./gradlew runIde`
+
+---
+
+## ⚠️ Marketplace Validation
+
+Before uploading to JetBrains Marketplace, ensure these requirements:
+
+### Plugin ID Requirements
+- **DO NOT use** `com.example.*` prefix (reserved/not allowed)
+- **USE** proper domain-based ID: `io.github.username.*` or `com.yourcompany.*`
+- Example: `io.github.nazymko.domaingenerator` ✅
+- Example: `com.example.domaingenerator` ❌
+
+### Version Compatibility
+- **DO NOT use** `untilBuild = "999.*"` magic value
+- **REMOVE** the `untilBuild` attribute to support all future versions
+- Or set to specific known version like `251.*` for IDE 2025.1.x
+
+**Example build.gradle.kts:**
+```kotlin
+group = "io.github.nazymko.domaingenerator"  // ✅ Valid ID
+
+intellijPlatform {
+    pluginConfiguration {
+        ideaVersion {
+            sinceBuild = "251"
+            // untilBuild removed for all future versions ✅
+        }
+    }
+}
+```
+
+**Common Validation Errors:**
+```
+❌ Invalid plugin descriptor 'plugin.xml'. The plugin ID 'com.example.domaingenerator' has a prefix 'com.example' that is not allowed.
+
+❌ Invalid plugin descriptor 'plugin.xml'. The <until-build> attribute (999.*) should not contain a magic value (999).
+```
 
 ---
 
